@@ -1,6 +1,6 @@
 "use strict";
 
-const API_URL = window.STATUS_PULSE_API_URL || "http://localhost:3000";
+const API_URL = "https://getstatus.onrender.com";
 const SLIDE_COUNT = 3;
 
 let token = null;
