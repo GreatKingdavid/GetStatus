@@ -1,3 +1,4 @@
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,23 +7,88 @@ datasource db {
   provider = "postgresql"
 }
 
+enum WorkspaceRole {
+  OWNER
+  ADMIN
+  VIEWER
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  REVOKED
+  EXPIRED
+}
+
 model User {
-  id           Int       @id @default(autoincrement())
-  email        String    @unique
+  id           Int          @id @default(autoincrement())
+  email        String       @unique
   passwordHash String
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime     @default(now())
 
   projects     Project[]
+  memberships  Membership[]
+  invitations  Invitation[] @relation("InvitationCreator")
+  acceptedInvitations Invitation[] @relation("InvitationAccepter")
+}
+
+model Workspace {
+  id          Int          @id @default(autoincrement())
+  name        String
+  createdAt   DateTime     @default(now())
+
+  memberships Membership[]
+  invitations Invitation[]
+  projects    Project[]
+}
+
+model Membership {
+  id          Int           @id @default(autoincrement())
+  userId      Int
+  workspaceId Int
+  role        WorkspaceRole @default(VIEWER)
+  createdAt   DateTime      @default(now())
+
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId, role])
+}
+
+model Invitation {
+  id          Int              @id @default(autoincrement())
+  email       String
+  role        WorkspaceRole    @default(VIEWER)
+  status      InvitationStatus @default(PENDING)
+  tokenHash   String            @unique
+  workspaceId Int
+  invitedById Int
+  acceptedById Int?
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime         @default(now())
+
+  workspace   Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy   User             @relation("InvitationCreator", fields: [invitedById], references: [id])
+  acceptedBy  User?            @relation("InvitationAccepter", fields: [acceptedById], references: [id])
+
+  @@index([workspaceId, email, status])
+  @@index([expiresAt])
 }
 
 model Project {
-  id        Int       @id @default(autoincrement())
-  name      String
-  ownerId   Int
-  createdAt DateTime  @default(now())
+  id          Int       @id @default(autoincrement())
+  name        String
+  ownerId     Int
+  workspaceId Int?
+  createdAt   DateTime  @default(now())
 
-  owner     User      @relation(fields: [ownerId], references: [id])
-  services  Service[]
+  owner       User      @relation(fields: [ownerId], references: [id])
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  services    Service[]
+
+  @@index([workspaceId])
 }
 
 model Service {
@@ -32,7 +98,7 @@ model Service {
   projectId Int
   createdAt DateTime      @default(now())
 
-  project   Project       @relation(fields: [projectId], references: [id])
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
   checks    CheckResult[]
 }
 
@@ -45,5 +111,5 @@ model CheckResult {
   success      Boolean
   error        String?
 
-  service      Service  @relation(fields: [serviceId], references: [id])
+  service      Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 }
