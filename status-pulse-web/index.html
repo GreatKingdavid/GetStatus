@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Status Pulse</title>
+<link rel="stylesheet" href="style.css">
+<script src="index.js" defer></script>
+</head>
+<body>
+<header class="header">
+<a class="wordmark" href="#" id="homeLink">STATUS PULSE</a>
+<button class="quiet-button" id="headerAction">SKIP INTRO</button>
+</header>
+<main>
+<section id="onboarding" class="screen">
+<div class="intro-meta">
+<span id="stepCount">01 / 03</span>
+</div>
+<div class="onboarding-stage">
+<article class="onboard-slide active" data-slide="0">
+<h1 class="statement">
+<span>Know</span>
+<span class="statement-second">what's <span class="muted-word">up.</span></span>
+</h1>
+<p class="supporting-copy">
+            Your services are always doing something.<br>
+            See what matters, without the noise.
+</p>
+<div class="instrument">
+<div class="instrument-caption">
+<span>STATUS PULSE</span>
+<span>OVERVIEW — 001</span>
+</div>
+<div class="instrument-main">
+<div class="instrument-number">01<span class="number-unit"> / VIEW</span></div>
+<div class="instrument-description">YOUR SYSTEMS, IN ONE PLACE</div>
+</div>
+<div class="instrument-foot">
+<span>MONITORING</span>
+<span>OVERVIEW</span>
+</div>
+</div>
+</article>
+<article class="onboard-slide" data-slide="1">
+<h1 class="statement">
+<span>Every</span>
+<span class="statement-second">signal <span class="muted-word">counts.</span></span>
+</h1>
+<p class="supporting-copy">
+            Monitor your endpoints. Measure response times.<br>
+            Know when something needs your attention.
+</p>
+<div class="instrument">
+<div class="instrument-caption">
+<span>HEALTH CHECK</span>
+<span>002</span>
+</div>
+<div class="demo-readout">
+<div>
+<span class="readout-label">RESPONSE</span>
+<strong>124<span>ms</span></strong>
+</div>
+<div>
+<span class="readout-label">HTTP STATUS</span>
+<strong>200</strong>
+</div>
+<div>
+<span class="readout-label">RESULT</span>
+<strong class="green-text">PASS</strong>
+</div>
+</div>
+<div class="instrument-foot">
+<span>REQUEST</span>
+<span>RESULT</span>
+</div>
+</div>
+</article>
+<article class="onboard-slide" data-slide="2">
+<h1 class="statement">
+<span>Stay</span>
+<span class="statement-second">one step <span class="muted-word">ahead.</span></span>
+</h1>
+<p class="supporting-copy">
+            Bring your services into focus.<br>
+            A simple workspace for the things you run.
+</p>
+<div class="instrument">
+<div class="instrument-caption">
+<span>YOUR WORKSPACE</span>
+<span>003</span>
+</div>
+<div class="final-readout">
+<span class="final-symbol">↗</span>
+<span>LET'S GET<br>THINGS IN CHECK.</span>
+</div>
+<div class="instrument-foot">
+<span>STATUS PULSE</span>
+<span>READY</span>
+</div>
+</div>
+</article>
+</div>
+<div class="onboarding-navigation">
+<div class="progress-wrap">
+<div class="progress-line"><span id="progressFill"></span></div>
+<span class="progress-label">INTRODUCTION</span>
+</div>
+<div class="navigation-buttons">
+<button class="round-button" id="previousSlide" aria-label="Previous slide" disabled>←</button>
+<button class="primary-button" id="nextSlide">CONTINUE <span>↗</span></button>
+</div>
+</div>
+</section>
+
+<section id="authScreen" class="screen hidden">
+<div class="intro-meta"><span>ACCOUNT</span></div>
+<div class="auth-layout">
+<div class="auth-heading">
+<h1 class="statement" id="authTitle">
+<span>Come</span>
+<span class="statement-second">into <span class="muted-word">focus.</span></span>
+</h1>
+<p class="supporting-copy">
+            Your services deserve your attention.<br>
+            Everything else can wait.
+</p>
+</div>
+<div class="auth-box">
+<p id="inviteNotice" class="notice hidden"></p>
+<div class="auth-tabs">
+<button class="auth-tab active" id="loginTab" data-mode="login" type="button">SIGN IN</button>
+<button class="auth-tab" id="registerTab" data-mode="register" type="button">CREATE ACCOUNT</button>
+</div>
+<form id="authForm">
+<label for="email">EMAIL ADDRESS</label>
+<input id="email" name="email" type="email" placeholder="you@example.com" autocomplete="email" required>
+<label for="password">PASSWORD</label>
+<input id="password" name="password" type="password" placeholder="Your password" autocomplete="current-password" minlength="8" required>
+<p id="authMessage" class="message" aria-live="polite"></p>
+<button class="primary-button full-button" id="authSubmit" type="submit">SIGN IN <span>↗</span></button>
+</form>
+</div>
+</div>
+<button class="back-link" id="backToIntro">← BACK</button>
+</section>
+
+<section id="dashboardScreen" class="screen dashboard-shell hidden">
+
+<!-- Sidebar on desktop / bottom navigation on mobile (layout handled in CSS) -->
+<nav class="app-nav" id="appNav" aria-label="Workspace navigation">
+<div class="nav-brand">
+<span class="nav-brand-mark">S<span>.</span></span>
+<span class="nav-brand-text">STATUS PULSE</span>
+</div>
+<ul class="nav-list">
+<li>
+<button type="button" class="nav-item active" data-view="overview" aria-current="page">
+<span class="nav-icon" aria-hidden="true">◉</span>
+<span class="nav-label">OVERVIEW</span>
+</button>
+</li>
+<li>
+<button type="button" class="nav-item" data-view="services">
+<span class="nav-icon" aria-hidden="true">▤</span>
+<span class="nav-label">SERVICES</span>
+</button>
+</li>
+<li>
+<button type="button" class="nav-item" data-view="history">
+<span class="nav-icon" aria-hidden="true">◷</span>
+<span class="nav-label">HISTORY</span>
+</button>
+</li>
+<li>
+<button type="button" class="nav-item" data-view="team">
+<span class="nav-icon" aria-hidden="true">◎</span>
+<span class="nav-label">TEAM</span>
+</button>
+</li>
+</ul>
+<button type="button" class="nav-signout" id="navLogout">
+<span class="nav-icon" aria-hidden="true">↗</span>
+<span class="nav-label">SIGN OUT</span>
+</button>
+</nav>
+
+<div class="dashboard-content">
+<div class="intro-meta">
+<span>MONITORING WORKSPACE</span>
+<button class="quiet-button" id="logoutButton">SIGN OUT</button>
+</div>
+
+<!-- VIEW: OVERVIEW -->
+<div class="dashboard-view active" data-view="overview">
+<div class="dashboard-intro">
+<div>
+<p class="section-index">YOUR ENVIRONMENT</p>
+<h1 class="dashboard-title">The current<br><span>picture.</span></h1>
+<p class="supporting-copy" id="welcomeText">A view of your monitored services.</p>
+</div>
+<button class="primary-button" id="openServiceForm">ADD SERVICE <span>+</span></button>
+</div>
+
+<div class="metrics">
+<article class="metric">
+<span class="metric-label">TOTAL SERVICES</span>
+<div class="metric-value" id="totalServices">—</div>
+<span class="metric-foot">IN YOUR WORKSPACES</span>
+</article>
+<article class="metric">
+<span class="metric-label">OPERATIONAL</span>
+<div class="metric-value green-text" id="upServices">—</div>
+<span class="metric-foot">PASSING THEIR CHECKS</span>
+</article>
+<article class="metric">
+<span class="metric-label">FAILING</span>
+<div class="metric-value" id="downServices">—</div>
+<span class="metric-foot">NEEDS ATTENTION</span>
+</article>
+<article class="metric">
+<span class="metric-label">RECENT CHECKS</span>
+<div class="metric-value" id="checkCount">—</div>
+<span class="metric-foot">RECORDED RESULTS</span>
+</article>
+<article class="metric">
+<span class="metric-label">SUCCESS RATE</span>
+<div class="metric-value" id="successRate">—</div>
+<span class="metric-foot">BASED ON RECENT CHECKS</span>
+</article>
+</div>
+
+<section class="data-section activity-section">
+<div class="section-heading">
+<div>
+<span class="section-index">LATEST</span>
+<h2>Latest activity</h2>
+</div>
+<button type="button" class="quiet-button" data-goto="history">VIEW ALL ↗</button>
+</div>
+<div id="overviewChecks" class="activity-list">
+<div class="empty-state">NO CHECK RESULTS YET.</div>
+</div>
+</section>
+</div>
+
+<!-- VIEW: SERVICES -->
+<div class="dashboard-view hidden" data-view="services">
+<section class="data-section">
+<div class="section-heading">
+<div>
+<span class="section-index">01 / SERVICES</span>
+<h2>Monitored services</h2>
+</div>
+<span class="section-note" id="serviceCount">0 ENDPOINTS</span>
+</div>
+
+<div class="form-toolbar">
+<button type="button" class="outline-button" id="openProjectForm">ADD PROJECT +</button>
+<button type="button" class="primary-button" id="openServiceFormAlt">ADD SERVICE <span>+</span></button>
+</div>
+
+<form id="createProjectForm" class="service-form hidden">
+<div class="form-heading">ADD A PROJECT</div>
+<label for="projectName">PROJECT NAME</label>
+<input id="projectName" type="text" placeholder="Production API" required>
+<div class="form-actions">
+<button type="button" class="quiet-button" id="cancelProject">CANCEL</button>
+<button type="submit" class="primary-button">CREATE PROJECT ↗</button>
+</div>
+</form>
+
+<form id="serviceForm" class="service-form hidden">
+<div class="form-heading">ADD SERVICE</div>
+<label for="serviceProject">PROJECT</label>
+<select id="serviceProject" required>
+<option value="">Load a project first</option>
+</select>
+<label for="serviceName">SERVICE NAME</label>
+<input id="serviceName" required placeholder="Production API">
+<label for="serviceUrl">SERVICE URL</label>
+<input id="serviceUrl" type="url" required placeholder="https://example.com">
+<div class="form-actions">
+<button type="button" class="quiet-button" id="cancelService">CANCEL</button>
+<button type="submit" class="primary-button">SAVE SERVICE ↗</button>
+</div>
+</form>
+
+<div class="service-list" id="serviceList">
+<div class="empty-state">YOUR SERVICES WILL APPEAR HERE.</div>
+</div>
+</section>
+</div>
+
+<!-- VIEW: HISTORY -->
+<div class="dashboard-view hidden" data-view="history">
+<section class="data-section activity-section">
+<div class="section-heading">
+<div>
+<span class="section-index">02 / HISTORY</span>
+<h2>Recent checks</h2>
+</div>
+</div>
+<div id="recentChecks" class="activity-list">
+<div class="empty-state">NO CHECK RESULTS YET.</div>
+</div>
+</section>
+</div>
+
+<!-- VIEW: TEAM -->
+<div class="dashboard-view hidden" data-view="team">
+<section class="data-section" id="teamSection">
+<div class="section-heading">
+<div>
+<span class="section-index">03 / TEAM</span>
+<h2>Workspace members</h2>
+</div>
+<span id="teamRole" class="section-note">YOUR ROLE</span>
+</div>
+
+<label for="workspaceSelect">WORKSPACE</label>
+<select id="workspaceSelect" class="team-select">
+<option value="">Loading workspaces...</option>
+</select>
+
+<div id="memberList" class="member-list">
+<div class="empty-state">LOADING TEAM...</div>
+</div>
+
+<form id="inviteForm" class="service-form">
+<div class="form-heading">INVITE A TEAMMATE</div>
+<p class="muted">Create a shareable invitation link. Send it to your teammate yourself.</p>
+
+<label for="inviteEmail">EMAIL ADDRESS</label>
+<input id="inviteEmail" type="email" placeholder="teammate@example.com" required>
+
+<label for="inviteRole">WORKSPACE ROLE</label>
+<select id="inviteRole" class="team-select">
+<option value="VIEWER">VIEWER — READ ONLY</option>
+<option value="ADMIN">ADMIN — MANAGE SERVICES AND INVITES</option>
+</select>
+
+<div class="form-actions">
+<button class="primary-button" id="inviteSubmit" type="submit">CREATE INVITATION ↗</button>
+</div>
+
+<p id="inviteMessage" class="message" aria-live="polite"></p>
+
+<div id="inviteLinkWrap" class="hidden">
+<label for="inviteLink">SHARE THIS INVITATION LINK</label>
+<input id="inviteLink" type="text" readonly>
+<button class="outline-button" id="copyInviteLink" type="button">COPY INVITATION LINK</button>
+</div>
+</form>
+</section>
+</div>
+
+<p id="dashboardMessage" class="message" aria-live="polite"></p>
+</div>
+</section>
+</main>
+<footer class="footer">
+<span>STATUS PULSE © 2026</span>
+<span>STATUS PULSE</span>
+</footer>
+</body>
+</html>
