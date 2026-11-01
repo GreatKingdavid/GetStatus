@@ -633,9 +633,9 @@ $("serviceForm").addEventListener("submit", async (event) => {
   if (button) button.disabled = true;
 
   try {
-    await api(`/projects/${encodeURIComponent(projectId)}/services`, {
+    await api(`/services`, {
       method: "POST",
-      body: JSON.stringify({ name, url })
+      body: JSON.stringify({ name, url, projectId })
     });
 
     $("serviceName").value = "";

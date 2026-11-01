@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "name": "get-status",
   "version": "0.0.1",
   "description": "",
@@ -54,5 +55,25 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^6.0.2"
+=======
+  "scripts": {
+  "build": "nest build",
+  "start": "nest start",
+  "start:dev": "nest start --watch",
+  "start:debug": "nest start --debug --watch",
+  "start:prod": "node dist/main",
+  "postinstall": "prisma generate"
+},
+"prisma": {
+  "schema": "prisma/schema.prisma"
+},
+  "devDependencies": {
+    "prisma": "^7.10.0"
+  },
+  "dependencies": {
+    "@nestjs/config": "^12.0.1",
+    "@prisma/client": "^7.10.0",
+    "dotenv": "^18.0.5"
+>>>>>>> 67dffed (Fix create service API route)
   }
 }

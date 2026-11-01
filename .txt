@@ -1,0 +1,29 @@
+http://localhost:3000/users/register
+
+{
+  "email": "test2@example.com",
+  "password": "password123"
+}
+
+
+http://localhost:3000/projects
+
+{
+  "name": "My Status Pulse Project",
+  "ownerId": 1
+}
+
+
+
+http://localhost:3000/services
+
+
+{
+  "name": "Example Website",
+  "url": "https://example.com",
+  "projectId": 1
+}
+
+
+
+http://localhost:3000/services/1/check
