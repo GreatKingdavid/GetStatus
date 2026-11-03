@@ -751,3 +751,55 @@ main:has(.dashboard-shell:not(.hidden)) { width: min(1240px, 92%); }
     transition-duration: .01ms !important;
   }
 }
+
+
+/* Monitoring check details */
+
+.service-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+}
+
+.check-details {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--muted, #888);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.ssl-valid {
+  color: var(--green);
+}
+
+.ssl-invalid {
+  color: var(--red);
+}
+
+.ssl-unknown {
+  color: var(--muted, #888);
+}
+
+.activity-name .check-details {
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.activity-error {
+  color: var(--red);
+}
+
+@media (max-width: 700px) {
+  .service-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .service-row .check-details {
+    grid-column: 1 / -1;
+  }
+}

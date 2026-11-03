@@ -1,3 +1,4 @@
+
 "use strict";
 
 const API_URL = "https://getstatus.onrender.com";
@@ -31,7 +32,6 @@ function escapeHTML(value) {
 function setMessage(element, message, type = "") {
   element.textContent = message;
   element.className = "message";
-  // The stylesheet only styles errors (red); successes get the accent colour.
   element.style.color = type === "success" ? "var(--green)" : "";
 }
 
@@ -88,7 +88,6 @@ function showScreen(screen) {
     $(id).classList.toggle("hidden", id !== screen);
   });
 
-  // The header action only makes sense during the introduction.
   $("headerAction").classList.toggle("hidden", screen !== "onboarding");
 
   window.scrollTo(0, 0);
@@ -105,8 +104,12 @@ function renderSlide() {
 
   $("stepCount").textContent =
     `${String(currentSlide + 1).padStart(2, "0")} / ${String(SLIDE_COUNT).padStart(2, "0")}`;
-  $("progressFill").style.width = `${((currentSlide + 1) / SLIDE_COUNT) * 100}%`;
+
+  $("progressFill").style.width =
+    `${((currentSlide + 1) / SLIDE_COUNT) * 100}%`;
+
   $("previousSlide").disabled = currentSlide === 0;
+
   $("nextSlide").innerHTML = isLast
     ? "GET STARTED <span>↗</span>"
     : "CONTINUE <span>↗</span>";
@@ -207,7 +210,11 @@ async function acceptPendingInvitation() {
     pendingInviteToken = null;
     clearInviteFromAddressBar();
 
-    setMessage($("dashboardMessage"), "Invitation accepted. Your workspace is ready.", "success");
+    setMessage(
+      $("dashboardMessage"),
+      "Invitation accepted. Your workspace is ready.",
+      "success"
+    );
   } catch (error) {
     setMessage(
       $("dashboardMessage"),
@@ -229,7 +236,11 @@ $("authForm").addEventListener("submit", async (event) => {
   const button = $("authSubmit");
 
   button.disabled = true;
-  setMessage($("authMessage"), isRegisterMode ? "Creating account..." : "Signing in...");
+
+  setMessage(
+    $("authMessage"),
+    isRegisterMode ? "Creating account..." : "Signing in..."
+  );
 
   try {
     if (isRegisterMode) {
@@ -239,7 +250,6 @@ $("authForm").addEventListener("submit", async (event) => {
       });
     }
 
-    // Registration creates the account; a separate login returns the JWT.
     const result = await api("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password })
@@ -301,7 +311,8 @@ document.querySelectorAll("[data-goto]").forEach((button) => {
 });
 
 async function enterDashboard() {
-  $("welcomeText").textContent = `Signed in as ${user?.email || "your account"}.`;
+  $("welcomeText").textContent =
+    `Signed in as ${user?.email || "your account"}.`;
 
   showScreen("dashboardScreen");
   setView("overview");
@@ -323,21 +334,27 @@ function logout() {
 
   $("serviceList").innerHTML =
     '<div class="empty-state">YOUR SERVICES WILL APPEAR HERE.</div>';
+
   $("overviewChecks").innerHTML =
     '<div class="empty-state">NO CHECK RESULTS YET.</div>';
+
   $("recentChecks").innerHTML =
     '<div class="empty-state">NO CHECK RESULTS YET.</div>';
+
   $("memberList").innerHTML =
     '<div class="empty-state">LOADING TEAM...</div>';
 
   ["totalServices", "upServices", "downServices", "checkCount", "successRate"]
-    .forEach((id) => { $(id).textContent = "—"; });
+    .forEach((id) => {
+      $(id).textContent = "—";
+    });
 
   $("serviceCount").textContent = "0 ENDPOINTS";
   $("createProjectForm").classList.add("hidden");
   $("serviceForm").classList.add("hidden");
   $("inviteLinkWrap").classList.add("hidden");
   $("inviteLink").value = "";
+
   setMessage($("dashboardMessage"), "");
 
   goToIntro();
@@ -360,9 +377,83 @@ function checkTime(check) {
   return new Date(check.checkedAt || check.createdAt || 0).getTime();
 }
 
+/* ---------- Monitoring formatters ---------- */
+
+function formatHttpStatus(check) {
+  return check?.statusCode != null
+    ? `HTTP ${escapeHTML(check.statusCode)}`
+    : "HTTP —";
+}
+
+function formatDnsTime(check) {
+  return check?.dnsResolutionTime != null
+    ? `${escapeHTML(check.dnsResolutionTime)} ms`
+    : "—";
+}
+
+function formatSslStatus(check) {
+  if (check?.sslValid === true) return "VALID";
+  if (check?.sslValid === false) return "INVALID";
+  return "N/A";
+}
+
+function formatSslExpiry(check) {
+  if (!check?.sslExpiresAt) {
+    return "Expiry unavailable";
+  }
+
+  const expiry = new Date(check.sslExpiresAt);
+
+  if (Number.isNaN(expiry.getTime())) {
+    return "Expiry unavailable";
+  }
+
+  const date = expiry.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
+
+  const remaining = Math.ceil(
+    (expiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  );
+
+  if (remaining < 0) {
+    return `Expired ${date}`;
+  }
+
+  if (remaining === 0) {
+    return `Expires ${date} · Less than 1 day left`;
+  }
+
+  return `Expires ${date} · ${remaining} days left`;
+}
+
+function checkDetailsMarkup(check) {
+  if (!check) return "";
+
+  const sslStatus = formatSslStatus(check);
+
+  const sslClass = sslStatus === "VALID"
+    ? "ssl-valid"
+    : sslStatus === "INVALID"
+      ? "ssl-invalid"
+      : "ssl-unknown";
+
+  return `
+    <div class="check-details">
+      <span>${formatHttpStatus(check)}</span>
+      <span>DNS ${formatDnsTime(check)}</span>
+      <span class="${sslClass}">SSL ${sslStatus}</span>
+      <span>${escapeHTML(formatSslExpiry(check))}</span>
+    </div>
+  `;
+}
+
 async function loadDashboard() {
   try {
     const projectData = await api("/projects");
+
     projects = Array.isArray(projectData)
       ? projectData
       : projectData?.projects || [];
@@ -371,7 +462,10 @@ async function loadDashboard() {
 
     for (const project of projects) {
       try {
-        const data = await api(`/projects/${encodeURIComponent(project.id)}/services`);
+        const data = await api(
+          `/projects/${encodeURIComponent(project.id)}/services`
+        );
+
         const projectServices = Array.isArray(data)
           ? data
           : data?.services || [];
@@ -383,7 +477,10 @@ async function loadDashboard() {
           });
         }
       } catch (error) {
-        console.error(`Unable to load services for project ${project.id}:`, error);
+        console.error(
+          `Unable to load services for project ${project.id}:`,
+          error
+        );
       }
     }
 
@@ -434,9 +531,20 @@ function renderServices() {
   $("serviceList").innerHTML = services.map((service) => {
     const latest = getLatestCheck(service);
     const healthy = latest ? Boolean(latest.success) : null;
-    const statusClass = healthy === null ? "unknown" : healthy ? "" : "failed";
-    const statusText = healthy === null ? "NOT CHECKED" : healthy ? "OPERATIONAL" : "FAILING";
-    const response = latest && latest.responseTime != null
+
+    const statusClass = healthy === null
+      ? "unknown"
+      : healthy
+        ? ""
+        : "failed";
+
+    const statusText = healthy === null
+      ? "NOT CHECKED"
+      : healthy
+        ? "OPERATIONAL"
+        : "FAILING";
+
+    const response = latest?.responseTime != null
       ? `${escapeHTML(latest.responseTime)} MS`
       : "—";
 
@@ -444,11 +552,27 @@ function renderServices() {
       <article class="service-row">
         <div class="service-info">
           <strong>${escapeHTML(service.name)}</strong>
-          <small>${escapeHTML(service.projectName || "Project")} · ${escapeHTML(service.url)}</small>
+          <small>
+            ${escapeHTML(service.projectName || "Project")}
+            · ${escapeHTML(service.url)}
+          </small>
         </div>
-        <span class="service-status ${statusClass}">${statusText}</span>
+
+        <span class="service-status ${statusClass}">
+          ${statusText}
+        </span>
+
         <span class="response-value">${response}</span>
-        <button class="check-button" type="button" data-check-service="${escapeHTML(service.id)}">CHECK NOW ↗</button>
+
+        <button
+          class="check-button"
+          type="button"
+          data-check-service="${escapeHTML(service.id)}"
+        >
+          CHECK NOW ↗
+        </button>
+
+        ${checkDetailsMarkup(latest)}
       </article>
     `;
   }).join("");
@@ -468,6 +592,7 @@ function collectChecks() {
   }
 
   checks.sort((a, b) => checkTime(b) - checkTime(a));
+
   return checks;
 }
 
@@ -475,17 +600,32 @@ function activityMarkup(checks) {
   return checks.map((check) => {
     const ok = Boolean(check.success);
     const date = check.checkedAt || check.createdAt;
-    const when = date ? new Date(date).toLocaleString() : "Time unavailable";
-    const response = check.responseTime != null ? ` · ${check.responseTime} ms` : "";
+
+    const when = date
+      ? new Date(date).toLocaleString()
+      : "Time unavailable";
+
+    const response = check.responseTime != null
+      ? ` · ${escapeHTML(check.responseTime)} ms`
+      : "";
 
     return `
       <article class="activity-row">
         <div class="activity-name">
           ${escapeHTML(check.serviceName)}
-          <small>${escapeHTML(when)}${escapeHTML(response)}</small>
-          ${check.error ? `<small>${escapeHTML(check.error)}</small>` : ""}
+
+          <small>${escapeHTML(when)}${response}</small>
+
+          ${checkDetailsMarkup(check)}
+
+          ${check.error
+            ? `<small class="activity-error">${escapeHTML(check.error)}</small>`
+            : ""}
         </div>
-        <span class="activity-result ${ok ? "" : "failed"}">${ok ? "SUCCESS" : "FAILED"}</span>
+
+        <span class="activity-result ${ok ? "" : "failed"}">
+          ${ok ? "SUCCESS" : "FAILED"}
+        </span>
       </article>
     `;
   }).join("");
@@ -493,7 +633,9 @@ function activityMarkup(checks) {
 
 function renderHistory() {
   const checks = collectChecks();
-  const empty = '<div class="empty-state">NO CHECK RESULTS YET.</div>';
+
+  const empty =
+    '<div class="empty-state">NO CHECK RESULTS YET.</div>';
 
   $("overviewChecks").innerHTML = checks.length
     ? activityMarkup(checks.slice(0, 5))
@@ -507,7 +649,11 @@ function renderHistory() {
 function renderMetrics() {
   const checks = collectChecks();
   const latestChecks = checks.slice(0, 10);
-  const successes = latestChecks.filter((check) => check.success).length;
+
+  const successes = latestChecks.filter(
+    (check) => check.success
+  ).length;
+
   const rate = latestChecks.length
     ? `${Math.round((successes / latestChecks.length) * 100)}%`
     : "—";
@@ -517,6 +663,7 @@ function renderMetrics() {
 
   for (const service of services) {
     const latest = getLatestCheck(service);
+
     if (!latest) continue;
 
     if (latest.success) up += 1;
@@ -534,9 +681,11 @@ function renderMetrics() {
 
 $("serviceList").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-check-service]");
+
   if (!button) return;
 
   const serviceId = button.dataset.checkService;
+
   button.disabled = true;
   button.textContent = "CHECKING...";
 
@@ -545,7 +694,12 @@ $("serviceList").addEventListener("click", async (event) => {
       method: "POST"
     });
 
-    setMessage($("dashboardMessage"), "Service check completed.", "success");
+    setMessage(
+      $("dashboardMessage"),
+      "Service check completed.",
+      "success"
+    );
+
     await loadDashboard();
   } catch (error) {
     setMessage($("dashboardMessage"), error.message, "error");
@@ -562,13 +716,17 @@ function openProjectForm() {
 }
 
 function openServiceForm() {
-  // Both "add service" buttons land on the Services view where the form lives.
   setView("services");
+
   $("createProjectForm").classList.add("hidden");
   $("serviceForm").classList.remove("hidden");
 
   if (!projects.length) {
-    setMessage($("dashboardMessage"), "Create a project before adding a service.", "error");
+    setMessage(
+      $("dashboardMessage"),
+      "Create a project before adding a service.",
+      "error"
+    );
     return;
   }
 
@@ -596,6 +754,7 @@ $("createProjectForm").addEventListener("submit", async (event) => {
 
   const name = $("projectName").value.trim();
   const button = event.submitter;
+
   if (!name) return;
 
   if (button) button.disabled = true;
@@ -608,7 +767,9 @@ $("createProjectForm").addEventListener("submit", async (event) => {
 
     $("projectName").value = "";
     $("createProjectForm").classList.add("hidden");
+
     setMessage($("dashboardMessage"), "Project created.", "success");
+
     await loadDashboard();
   } catch (error) {
     setMessage($("dashboardMessage"), error.message, "error");
@@ -626,14 +787,18 @@ $("serviceForm").addEventListener("submit", async (event) => {
   const button = event.submitter;
 
   if (!projectId) {
-    setMessage($("dashboardMessage"), "Create or select a project first.", "error");
+    setMessage(
+      $("dashboardMessage"),
+      "Create or select a project first.",
+      "error"
+    );
     return;
   }
 
   if (button) button.disabled = true;
 
   try {
-    await api(`/services`, {
+    await api("/services", {
       method: "POST",
       body: JSON.stringify({ name, url, projectId })
     });
@@ -641,7 +806,9 @@ $("serviceForm").addEventListener("submit", async (event) => {
     $("serviceName").value = "";
     $("serviceUrl").value = "";
     $("serviceForm").classList.add("hidden");
+
     setMessage($("dashboardMessage"), "Service added.", "success");
+
     await loadDashboard();
   } catch (error) {
     setMessage($("dashboardMessage"), error.message, "error");
@@ -655,26 +822,37 @@ $("serviceForm").addEventListener("submit", async (event) => {
 async function loadWorkspaces() {
   try {
     const data = await api("/workspaces");
-    workspaces = Array.isArray(data) ? data : data?.workspaces || [];
+
+    workspaces = Array.isArray(data)
+      ? data
+      : data?.workspaces || [];
 
     const select = $("workspaceSelect");
     select.innerHTML = "";
 
     if (!workspaces.length) {
-      select.innerHTML = '<option value="">No workspaces found</option>';
+      select.innerHTML =
+        '<option value="">No workspaces found</option>';
+
       activeWorkspaceId = null;
       activeWorkspaceRole = null;
+
       $("teamRole").textContent = "YOUR ROLE";
+
       renderTeamControls();
+
       $("memberList").innerHTML =
         '<div class="empty-state">NO WORKSPACES AVAILABLE.</div>';
+
       return;
     }
 
     for (const workspace of workspaces) {
       const option = document.createElement("option");
       option.value = workspace.id;
-      option.textContent = workspace.name || `Workspace ${workspace.id}`;
+      option.textContent =
+        workspace.name || `Workspace ${workspace.id}`;
+
       select.appendChild(option);
     }
 
@@ -695,8 +873,11 @@ async function loadWorkspaces() {
 $("workspaceSelect").addEventListener("change", async () => {
   activeWorkspaceId = $("workspaceSelect").value || null;
   activeWorkspaceRole = null;
+
   $("inviteLinkWrap").classList.add("hidden");
+
   setMessage($("inviteMessage"), "");
+
   await loadWorkspaceMembers();
 });
 
@@ -707,10 +888,14 @@ async function loadWorkspaceMembers() {
     '<div class="empty-state">LOADING TEAM MEMBERS...</div>';
 
   try {
-    const data = await api(`/workspaces/${encodeURIComponent(activeWorkspaceId)}/members`);
-    const members = Array.isArray(data) ? data : data?.members || [];
+    const data = await api(
+      `/workspaces/${encodeURIComponent(activeWorkspaceId)}/members`
+    );
 
-    // Accept common API response shapes for memberships.
+    const members = Array.isArray(data)
+      ? data
+      : data?.members || [];
+
     const normalized = members.map((item) => ({
       user: item.user || item.member || item,
       role: item.role || item.membership?.role || "VIEWER"
@@ -718,12 +903,14 @@ async function loadWorkspaceMembers() {
 
     const ownMembership = normalized.find((item) => {
       const memberId = item.user.id ?? item.user.userId;
-      return user?.id != null && String(memberId) === String(user.id);
+
+      return user?.id != null &&
+        String(memberId) === String(user.id);
     });
 
-    // Fall back to the role supplied in the workspace list, if the API provides it.
     const selectedWorkspace = workspaces.find(
-      (workspace) => String(workspace.id) === String(activeWorkspaceId)
+      (workspace) =>
+        String(workspace.id) === String(activeWorkspaceId)
     );
 
     activeWorkspaceRole =
@@ -741,8 +928,11 @@ async function loadWorkspaceMembers() {
         '<div class="empty-state">NO MEMBERS RETURNED.</div>';
     } else {
       $("memberList").innerHTML = normalized.map((item) => {
-        const memberEmail = item.user.email || item.user.name || "Workspace member";
-        const isOwner = String(item.role).toUpperCase() === "OWNER";
+        const memberEmail =
+          item.user.email || item.user.name || "Workspace member";
+
+        const isOwner =
+          String(item.role).toUpperCase() === "OWNER";
 
         return `
           <article class="member-row">
@@ -750,7 +940,10 @@ async function loadWorkspaceMembers() {
               <strong>${escapeHTML(memberEmail)}</strong>
               <small>Workspace member</small>
             </div>
-            <span class="member-role${isOwner ? " owner" : ""}">${escapeHTML(String(item.role).toUpperCase())}</span>
+
+            <span class="member-role${isOwner ? " owner" : ""}">
+              ${escapeHTML(String(item.role).toUpperCase())}
+            </span>
           </article>
         `;
       }).join("");
@@ -760,18 +953,18 @@ async function loadWorkspaceMembers() {
   } catch (error) {
     $("memberList").innerHTML =
       `<div class="empty-state">${escapeHTML(error.message)}</div>`;
+
     activeWorkspaceRole = null;
+
     renderTeamControls();
   }
 }
 
 function renderTeamControls() {
-  // This is a usability hint only. The backend must enforce authorization.
   const canInvite = ["OWNER", "ADMIN"].includes(
     String(activeWorkspaceRole || "").toUpperCase()
   );
 
-  // The invite form (including its message line) is hidden for everyone else.
   $("inviteForm").classList.toggle("hidden", !canInvite);
 
   if (!canInvite) {
@@ -785,7 +978,11 @@ $("inviteForm").addEventListener("submit", async (event) => {
   event.preventDefault();
 
   if (!activeWorkspaceId) {
-    setMessage($("inviteMessage"), "Select a workspace first.", "error");
+    setMessage(
+      $("inviteMessage"),
+      "Select a workspace first.",
+      "error"
+    );
     return;
   }
 
@@ -795,6 +992,7 @@ $("inviteForm").addEventListener("submit", async (event) => {
 
   button.disabled = true;
   $("inviteLinkWrap").classList.add("hidden");
+
   setMessage($("inviteMessage"), "Creating invitation...");
 
   try {
@@ -809,11 +1007,16 @@ $("inviteForm").addEventListener("submit", async (event) => {
     const rawToken = data?.token || data?.invitation?.token;
 
     if (!rawToken) {
-      throw new Error("Invitation created, but the API did not return its token.");
+      throw new Error(
+        "Invitation created, but the API did not return its token."
+      );
     }
 
-    // The URL contains the one-time token. Share it only with the intended invitee.
-    const inviteUrl = new URL(window.location.pathname, window.location.origin);
+    const inviteUrl = new URL(
+      window.location.pathname,
+      window.location.origin
+    );
+
     inviteUrl.searchParams.set("invite", rawToken);
 
     $("inviteLink").value = inviteUrl.toString();
@@ -842,15 +1045,23 @@ $("copyInviteLink").addEventListener("click", async () => {
     } else {
       input.focus();
       input.select();
+
       const copied = document.execCommand("copy");
 
-      if (!copied) throw new Error("Copy was blocked by the browser.");
+      if (!copied) {
+        throw new Error("Copy was blocked by the browser.");
+      }
     }
 
-    setMessage($("inviteMessage"), "Invitation link copied.", "success");
+    setMessage(
+      $("inviteMessage"),
+      "Invitation link copied.",
+      "success"
+    );
   } catch {
     input.focus();
     input.select();
+
     setMessage(
       $("inviteMessage"),
       "Automatic copy failed. Select the link above and copy it manually.",

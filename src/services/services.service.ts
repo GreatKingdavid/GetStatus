@@ -7,6 +7,11 @@ import {
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { lookup } from 'node:dns';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { TLSSocket } from 'node:tls';
+import { performance } from 'node:perf_hooks';
 
 @Injectable()
 export class ServicesService {
@@ -76,7 +81,9 @@ export class ServicesService {
     }
 
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      throw new BadRequestException('Only HTTP and HTTPS URLs are supported');
+      throw new BadRequestException(
+        'Only HTTP and HTTPS URLs are supported',
+      );
     }
 
     const { role } = await this.getProjectAccess(projectId, userId);
@@ -176,31 +183,154 @@ export class ServicesService {
     return checkPromise;
   }
 
+  private async measureDns(hostname: string): Promise<number | null> {
+    const start = performance.now();
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        lookup(hostname, (error) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve();
+          }
+        });
+      });
+
+      return Math.round(performance.now() - start);
+    } catch {
+      return null;
+    }
+  }
+
+  private async performHttpCheck(url: URL): Promise<{
+    statusCode: number;
+    dnsResolutionTime: number | null;
+    sslValid: boolean | null;
+    sslExpiresAt: Date | null;
+  }> {
+    const dnsResolutionTime = await this.measureDns(url.hostname);
+
+    return new Promise((resolve, reject) => {
+      const isHttps = url.protocol === 'https:';
+
+      let sslValid: boolean | null = null;
+      let sslExpiresAt: Date | null = null;
+
+      const captureTlsInfo = (socket: TLSSocket) => {
+        if (!isHttps || !socket.encrypted) {
+          return;
+        }
+
+        const certificate = socket.getPeerCertificate();
+
+        if (!certificate || Object.keys(certificate).length === 0) {
+          return;
+        }
+
+        const expiresAt = certificate.valid_to
+          ? new Date(certificate.valid_to)
+          : null;
+
+        sslValid =
+          socket.authorized &&
+          expiresAt !== null &&
+          !Number.isNaN(expiresAt.getTime()) &&
+          expiresAt.getTime() > Date.now();
+
+        if (
+          expiresAt &&
+          !Number.isNaN(expiresAt.getTime())
+        ) {
+          sslExpiresAt = expiresAt;
+        }
+      };
+
+      const request = (isHttps ? httpsRequest : httpRequest)(
+        url,
+        {
+          method: 'GET',
+          timeout: 10_000,
+        },
+        (response) => {
+          const statusCode = response.statusCode ?? 0;
+
+          if (isHttps && response.socket) {
+            captureTlsInfo(response.socket as TLSSocket);
+          }
+
+          response.on('error', reject);
+
+          response.on('aborted', () => {
+            reject(new Error('Response aborted'));
+          });
+
+          response.on('end', () => {
+            resolve({
+              statusCode,
+              dnsResolutionTime,
+              sslValid,
+              sslExpiresAt,
+            });
+          });
+
+          response.resume();
+        },
+      );
+
+      if (isHttps) {
+        request.on('socket', (socket) => {
+          const tlsSocket = socket as TLSSocket;
+
+          tlsSocket.once('secureConnect', () => {
+            captureTlsInfo(tlsSocket);
+          });
+        });
+      }
+
+      request.on('timeout', () => {
+        request.destroy(new Error('Request timed out'));
+      });
+
+      request.on('error', reject);
+
+      request.end();
+    });
+  }
+
   private async performCheck(service: { id: number; url: string }) {
     const start = Date.now();
 
     let statusCode: number | undefined;
     let success = false;
     let error: string | undefined;
+    let dnsResolutionTime: number | null = null;
+    let sslValid: boolean | null = null;
+    let sslExpiresAt: Date | null = null;
 
-    // Initial attempt + one retry.
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        const response = await fetch(service.url, {
-          signal: AbortSignal.timeout(10_000),
-        });
+        const url = new URL(service.url);
+        const result = await this.performHttpCheck(url);
 
-        statusCode = response.status;
-        success = response.ok;
+        statusCode = result.statusCode;
+        dnsResolutionTime = result.dnsResolutionTime;
+        sslValid = result.sslValid;
+        sslExpiresAt = result.sslExpiresAt;
+
+        success = statusCode >= 200 && statusCode < 400;
         error = undefined;
 
         if (success) {
           break;
         }
-      } catch {
+      } catch (checkError) {
         statusCode = undefined;
         success = false;
-        error = 'Request failed or timed out';
+        error =
+          checkError instanceof Error
+            ? checkError.message
+            : 'Request failed';
       }
     }
 
@@ -209,9 +339,13 @@ export class ServicesService {
         serviceId: service.id,
         statusCode,
         responseTime: Date.now() - start,
+        dnsResolutionTime,
+        sslValid,
+        sslExpiresAt,
         success,
         error,
       },
     });
   }
 }
+
