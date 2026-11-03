@@ -1,8 +1,10 @@
-
 "use strict";
 
 const API_URL = "https://getstatus.onrender.com";
 const SLIDE_COUNT = 3;
+const SESSION_TOKEN_KEY = "statusPulseToken";
+const SESSION_USER_KEY = "statusPulseUser";
+const DASHBOARD_REFRESH_INTERVAL = 60_000;
 
 let token = null;
 let user = null;
@@ -15,9 +17,102 @@ let isRegisterMode = false;
 let currentSlide = 0;
 let currentScreen = "onboarding";
 let currentView = "overview";
-let pendingInviteToken = new URLSearchParams(window.location.search).get("invite");
+let dashboardRefreshTimer = null;
+let dashboardLoadInProgress = false;
+
+let pendingInviteToken = new URLSearchParams(
+  window.location.search
+).get("invite");
 
 const $ = (id) => document.getElementById(id);
+
+/* ---------- Session persistence ---------- */
+
+function saveSession() {
+  if (!token) return;
+
+  try {
+    localStorage.setItem(SESSION_TOKEN_KEY, token);
+    localStorage.setItem(
+      SESSION_USER_KEY,
+      JSON.stringify(user || {})
+    );
+  } catch (error) {
+    console.error("Unable to save login session:", error);
+  }
+}
+
+function clearSavedSession() {
+  try {
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+    localStorage.removeItem(SESSION_USER_KEY);
+  } catch (error) {
+    console.error("Unable to clear saved session:", error);
+  }
+}
+
+function restoreSavedSession() {
+  try {
+    const savedToken = localStorage.getItem(SESSION_TOKEN_KEY);
+    const savedUser = localStorage.getItem(SESSION_USER_KEY);
+
+    if (!savedToken) return false;
+
+    token = savedToken;
+
+    try {
+      user = savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      user = null;
+    }
+
+    return true;
+  } catch (error) {
+    console.error("Unable to restore login session:", error);
+    clearSavedSession();
+    return false;
+  }
+}
+
+function stopDashboardPolling() {
+  if (dashboardRefreshTimer !== null) {
+    clearInterval(dashboardRefreshTimer);
+    dashboardRefreshTimer = null;
+  }
+}
+
+function startDashboardPolling() {
+  stopDashboardPolling();
+
+  dashboardRefreshTimer = setInterval(() => {
+    if (
+      token &&
+      currentScreen === "dashboardScreen" &&
+      !document.hidden
+    ) {
+      loadDashboard({ silent: true });
+    }
+  }, DASHBOARD_REFRESH_INTERVAL);
+}
+
+function expireSession() {
+  stopDashboardPolling();
+
+  token = null;
+  user = null;
+
+  clearSavedSession();
+
+  showAuth("login");
+
+  setMessage(
+    $("authMessage"),
+    "Your session has expired. Please sign in again.",
+    "error"
+  );
+}
+
+/* ---------- Helpers ---------- */
 
 function escapeHTML(value) {
   return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -30,10 +125,14 @@ function escapeHTML(value) {
 }
 
 function setMessage(element, message, type = "") {
+  if (!element) return;
+
   element.textContent = message;
   element.className = "message";
   element.style.color = type === "success" ? "var(--green)" : "";
 }
+
+/* ---------- API ---------- */
 
 async function api(path, options = {}) {
   const headers = { ...(options.headers || {}) };
@@ -54,7 +153,9 @@ async function api(path, options = {}) {
       headers
     });
   } catch {
-    throw new Error("Cannot reach the API. Check that your backend is running.");
+    throw new Error(
+      "Cannot reach the API. Check that your backend is running."
+    );
   }
 
   const text = await response.text();
@@ -73,7 +174,10 @@ async function api(path, options = {}) {
       ? data.message.join(", ")
       : data?.message || `Request failed (${response.status})`;
 
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+
+    throw error;
   }
 
   return data;
@@ -88,7 +192,10 @@ function showScreen(screen) {
     $(id).classList.toggle("hidden", id !== screen);
   });
 
-  $("headerAction").classList.toggle("hidden", screen !== "onboarding");
+  $("headerAction").classList.toggle(
+    "hidden",
+    screen !== "onboarding"
+  );
 
   window.scrollTo(0, 0);
 }
@@ -97,7 +204,10 @@ function showScreen(screen) {
 
 function renderSlide() {
   document.querySelectorAll(".onboard-slide").forEach((slide) => {
-    slide.classList.toggle("active", Number(slide.dataset.slide) === currentSlide);
+    slide.classList.toggle(
+      "active",
+      Number(slide.dataset.slide) === currentSlide
+    );
   });
 
   const isLast = currentSlide === SLIDE_COUNT - 1;
@@ -182,6 +292,7 @@ function updateInviteNotice() {
   if (pendingInviteToken) {
     notice.textContent =
       "You have a workspace invitation. Sign in or create an account using the email address the invitation was sent to.";
+
     notice.classList.remove("hidden");
   } else {
     notice.classList.add("hidden");
@@ -190,8 +301,14 @@ function updateInviteNotice() {
 
 function clearInviteFromAddressBar() {
   const url = new URL(window.location.href);
+
   url.searchParams.delete("invite");
-  window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+
+  window.history.replaceState(
+    {},
+    "",
+    url.pathname + url.search + url.hash
+  );
 }
 
 async function acceptPendingInvitation() {
@@ -199,7 +316,10 @@ async function acceptPendingInvitation() {
 
   const inviteToken = pendingInviteToken;
 
-  setMessage($("dashboardMessage"), "Accepting your workspace invitation...");
+  setMessage(
+    $("dashboardMessage"),
+    "Accepting your workspace invitation..."
+  );
 
   try {
     await api("/invitations/accept", {
@@ -255,7 +375,11 @@ $("authForm").addEventListener("submit", async (event) => {
       body: JSON.stringify({ email, password })
     });
 
-    token = result.access_token || result.accessToken || result.token;
+    token =
+      result.access_token ||
+      result.accessToken ||
+      result.token;
+
     user = result.user || { email };
 
     if (!token) {
@@ -266,7 +390,10 @@ $("authForm").addEventListener("submit", async (event) => {
       );
     }
 
+    saveSession();
+
     $("password").value = "";
+
     setMessage($("authMessage"), "");
 
     await enterDashboard();
@@ -284,12 +411,14 @@ function setView(view) {
 
   document.querySelectorAll(".dashboard-view").forEach((section) => {
     const active = section.dataset.view === view;
+
     section.classList.toggle("hidden", !active);
     section.classList.toggle("active", active);
   });
 
   document.querySelectorAll(".nav-item").forEach((item) => {
     const active = item.dataset.view === view;
+
     item.classList.toggle("active", active);
 
     if (active) {
@@ -316,14 +445,27 @@ async function enterDashboard() {
 
   showScreen("dashboardScreen");
   setView("overview");
+
   setMessage($("dashboardMessage"), "");
 
   await acceptPendingInvitation();
+
+  if (!token) return;
+
   await loadDashboard();
+
+  if (!token) return;
+
   await loadWorkspaces();
+
+  if (!token) return;
+
+  startDashboardPolling();
 }
 
 function logout() {
+  stopDashboardPolling();
+
   token = null;
   user = null;
   projects = [];
@@ -331,6 +473,8 @@ function logout() {
   workspaces = [];
   activeWorkspaceId = null;
   activeWorkspaceRole = null;
+
+  clearSavedSession();
 
   $("serviceList").innerHTML =
     '<div class="empty-state">YOUR SERVICES WILL APPEAR HERE.</div>';
@@ -355,6 +499,12 @@ function logout() {
   $("inviteLinkWrap").classList.add("hidden");
   $("inviteLink").value = "";
 
+  const historySearch = $("historySearch");
+
+  if (historySearch) {
+    historySearch.value = "";
+  }
+
   setMessage($("dashboardMessage"), "");
 
   goToIntro();
@@ -374,7 +524,9 @@ function getLatestCheck(service) {
 }
 
 function checkTime(check) {
-  return new Date(check.checkedAt || check.createdAt || 0).getTime();
+  return new Date(
+    check.checkedAt || check.createdAt || 0
+  ).getTime();
 }
 
 /* ---------- Monitoring formatters ---------- */
@@ -450,7 +602,13 @@ function checkDetailsMarkup(check) {
   `;
 }
 
-async function loadDashboard() {
+async function loadDashboard({ silent = false } = {}) {
+  if (!token || dashboardLoadInProgress) {
+    return false;
+  }
+
+  dashboardLoadInProgress = true;
+
   try {
     const projectData = await api("/projects");
 
@@ -477,6 +635,10 @@ async function loadDashboard() {
           });
         }
       } catch (error) {
+        if (error.status === 401) {
+          throw error;
+        }
+
         console.error(
           `Unable to load services for project ${project.id}:`,
           error
@@ -484,12 +646,37 @@ async function loadDashboard() {
       }
     }
 
+    if (!token) return false;
+
     renderProjects();
     renderServices();
     renderHistory();
     renderMetrics();
+
+    if (!silent) {
+      setMessage($("dashboardMessage"), "");
+    }
+
+    return true;
   } catch (error) {
-    setMessage($("dashboardMessage"), error.message, "error");
+    if (error.status === 401) {
+      expireSession();
+      return false;
+    }
+
+    if (!silent) {
+      setMessage(
+        $("dashboardMessage"),
+        error.message,
+        "error"
+      );
+    } else {
+      console.error("Automatic dashboard refresh failed:", error);
+    }
+
+    return false;
+  } finally {
+    dashboardLoadInProgress = false;
   }
 }
 
@@ -502,18 +689,24 @@ function renderProjects() {
   select.innerHTML = "";
 
   if (!projects.length) {
-    select.innerHTML = '<option value="">Create a project first</option>';
+    select.innerHTML =
+      '<option value="">Create a project first</option>';
+
     return;
   }
 
   for (const project of projects) {
     const option = document.createElement("option");
+
     option.value = project.id;
     option.textContent = project.name;
+
     select.appendChild(option);
   }
 
-  if (projects.some((project) => String(project.id) === previousValue)) {
+  if (projects.some(
+    (project) => String(project.id) === previousValue
+  )) {
     select.value = previousValue;
   }
 }
@@ -525,6 +718,7 @@ function renderServices() {
   if (!services.length) {
     $("serviceList").innerHTML =
       '<div class="empty-state">NO SERVICES YET. CREATE A PROJECT AND ADD A SERVICE.</div>';
+
     return;
   }
 
@@ -570,6 +764,15 @@ function renderServices() {
           data-check-service="${escapeHTML(service.id)}"
         >
           CHECK NOW ↗
+        </button>
+
+        <button
+          class="delete-button"
+          type="button"
+          data-delete-service="${escapeHTML(service.id)}"
+          aria-label="Delete ${escapeHTML(service.name)}"
+        >
+          DELETE
         </button>
 
         ${checkDetailsMarkup(latest)}
@@ -631,6 +834,35 @@ function activityMarkup(checks) {
   }).join("");
 }
 
+/* ---------- History search ---------- */
+
+function filterHistoryChecks(checks, query) {
+  const normalizedQuery = query.trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return checks;
+  }
+
+  return checks.filter((check) => {
+    const result = check.success ? "success" : "failed";
+
+    const searchableText = [
+      check.serviceName,
+      check.projectName,
+      result,
+      check.statusCode,
+      check.error,
+      check.responseTime,
+      check.dnsResolutionTime
+    ]
+      .filter((value) => value !== null && value !== undefined)
+      .join(" ")
+      .toLowerCase();
+
+    return searchableText.includes(normalizedQuery);
+  });
+}
+
 function renderHistory() {
   const checks = collectChecks();
 
@@ -641,10 +873,34 @@ function renderHistory() {
     ? activityMarkup(checks.slice(0, 5))
     : empty;
 
-  $("recentChecks").innerHTML = checks.length
-    ? activityMarkup(checks.slice(0, 20))
-    : empty;
+  const historySearch = $("historySearch");
+  const query = historySearch?.value || "";
+
+  const filteredChecks = filterHistoryChecks(checks, query);
+
+  if (!checks.length) {
+    $("recentChecks").innerHTML = empty;
+    return;
+  }
+
+  if (!filteredChecks.length) {
+    $("recentChecks").innerHTML =
+      '<div class="empty-state">NO CHECKS MATCH YOUR SEARCH.</div>';
+
+    return;
+  }
+
+  $("recentChecks").innerHTML =
+    activityMarkup(filteredChecks.slice(0, 20));
 }
+
+const historySearchInput = $("historySearch");
+
+if (historySearchInput) {
+  historySearchInput.addEventListener("input", renderHistory);
+}
+
+/* ---------- Metrics ---------- */
 
 function renderMetrics() {
   const checks = collectChecks();
@@ -677,41 +933,95 @@ function renderMetrics() {
   $("successRate").textContent = rate;
 }
 
-/* ---------- Services and projects ---------- */
+/* ---------- Services ---------- */
 
 $("serviceList").addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-check-service]");
+  const checkButton = event.target.closest("[data-check-service]");
+  const deleteButton = event.target.closest("[data-delete-service]");
 
-  if (!button) return;
+  if (checkButton) {
+    const serviceId = checkButton.dataset.checkService;
 
-  const serviceId = button.dataset.checkService;
+    checkButton.disabled = true;
+    checkButton.textContent = "CHECKING...";
 
-  button.disabled = true;
-  button.textContent = "CHECKING...";
+    try {
+      await api(
+        `/services/${encodeURIComponent(serviceId)}/check`,
+        { method: "POST" }
+      );
 
-  try {
-    await api(`/services/${encodeURIComponent(serviceId)}/check`, {
-      method: "POST"
-    });
+      setMessage(
+        $("dashboardMessage"),
+        "Service check completed.",
+        "success"
+      );
 
-    setMessage(
-      $("dashboardMessage"),
-      "Service check completed.",
-      "success"
+      await loadDashboard();
+    } catch (error) {
+      setMessage(
+        $("dashboardMessage"),
+        error.message,
+        "error"
+      );
+    } finally {
+      checkButton.disabled = false;
+      checkButton.textContent = "CHECK NOW ↗";
+    }
+
+    return;
+  }
+
+  if (deleteButton) {
+    const serviceId = deleteButton.dataset.deleteService;
+
+    const service = services.find(
+      (item) => String(item.id) === String(serviceId)
     );
 
-    await loadDashboard();
-  } catch (error) {
-    setMessage($("dashboardMessage"), error.message, "error");
-  } finally {
-    button.disabled = false;
-    button.textContent = "CHECK NOW ↗";
+    const serviceName = service?.name || "this service";
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${serviceName}"?\n\nServices with monitoring history cannot be deleted.`
+    );
+
+    if (!confirmed) return;
+
+    deleteButton.disabled = true;
+    deleteButton.textContent = "DELETING...";
+
+    try {
+      await api(
+        `/services/${encodeURIComponent(serviceId)}`,
+        { method: "DELETE" }
+      );
+
+      setMessage(
+        $("dashboardMessage"),
+        "Service deleted successfully.",
+        "success"
+      );
+
+      await loadDashboard();
+    } catch (error) {
+      setMessage(
+        $("dashboardMessage"),
+        error.message,
+        "error"
+      );
+
+      deleteButton.disabled = false;
+      deleteButton.textContent = "DELETE";
+    }
   }
 });
+
+/* ---------- Projects and service forms ---------- */
 
 function openProjectForm() {
   $("serviceForm").classList.add("hidden");
   $("createProjectForm").classList.remove("hidden");
+
   $("projectName").focus();
 }
 
@@ -727,10 +1037,12 @@ function openServiceForm() {
       "Create a project before adding a service.",
       "error"
     );
+
     return;
   }
 
   setMessage($("dashboardMessage"), "");
+
   $("serviceName").focus();
 }
 
@@ -768,11 +1080,19 @@ $("createProjectForm").addEventListener("submit", async (event) => {
     $("projectName").value = "";
     $("createProjectForm").classList.add("hidden");
 
-    setMessage($("dashboardMessage"), "Project created.", "success");
+    setMessage(
+      $("dashboardMessage"),
+      "Project created.",
+      "success"
+    );
 
     await loadDashboard();
   } catch (error) {
-    setMessage($("dashboardMessage"), error.message, "error");
+    setMessage(
+      $("dashboardMessage"),
+      error.message,
+      "error"
+    );
   } finally {
     if (button) button.disabled = false;
   }
@@ -792,6 +1112,7 @@ $("serviceForm").addEventListener("submit", async (event) => {
       "Create or select a project first.",
       "error"
     );
+
     return;
   }
 
@@ -807,11 +1128,19 @@ $("serviceForm").addEventListener("submit", async (event) => {
     $("serviceUrl").value = "";
     $("serviceForm").classList.add("hidden");
 
-    setMessage($("dashboardMessage"), "Service added.", "success");
+    setMessage(
+      $("dashboardMessage"),
+      "Service added.",
+      "success"
+    );
 
     await loadDashboard();
   } catch (error) {
-    setMessage($("dashboardMessage"), error.message, "error");
+    setMessage(
+      $("dashboardMessage"),
+      error.message,
+      "error"
+    );
   } finally {
     if (button) button.disabled = false;
   }
@@ -849,6 +1178,7 @@ async function loadWorkspaces() {
 
     for (const workspace of workspaces) {
       const option = document.createElement("option");
+
       option.value = workspace.id;
       option.textContent =
         workspace.name || `Workspace ${workspace.id}`;
@@ -865,6 +1195,11 @@ async function loadWorkspaces() {
 
     await loadWorkspaceMembers();
   } catch (error) {
+    if (error.status === 401) {
+      expireSession();
+      return;
+    }
+
     $("memberList").innerHTML =
       `<div class="empty-state">${escapeHTML(error.message)}</div>`;
   }
@@ -951,6 +1286,11 @@ async function loadWorkspaceMembers() {
 
     renderTeamControls();
   } catch (error) {
+    if (error.status === 401) {
+      expireSession();
+      return;
+    }
+
     $("memberList").innerHTML =
       `<div class="empty-state">${escapeHTML(error.message)}</div>`;
 
@@ -983,6 +1323,7 @@ $("inviteForm").addEventListener("submit", async (event) => {
       "Select a workspace first.",
       "error"
     );
+
     return;
   }
 
@@ -991,6 +1332,7 @@ $("inviteForm").addEventListener("submit", async (event) => {
   const button = $("inviteSubmit");
 
   button.disabled = true;
+
   $("inviteLinkWrap").classList.add("hidden");
 
   setMessage($("inviteMessage"), "Creating invitation...");
@@ -1020,7 +1362,9 @@ $("inviteForm").addEventListener("submit", async (event) => {
     inviteUrl.searchParams.set("invite", rawToken);
 
     $("inviteLink").value = inviteUrl.toString();
+
     $("inviteLinkWrap").classList.remove("hidden");
+
     $("inviteEmail").value = "";
 
     setMessage(
@@ -1029,7 +1373,11 @@ $("inviteForm").addEventListener("submit", async (event) => {
       "success"
     );
   } catch (error) {
-    setMessage($("inviteMessage"), error.message, "error");
+    setMessage(
+      $("inviteMessage"),
+      error.message,
+      "error"
+    );
   } finally {
     button.disabled = false;
   }
@@ -1072,11 +1420,20 @@ $("copyInviteLink").addEventListener("click", async () => {
 
 /* ---------- Start ---------- */
 
-renderSlide();
+async function startApplication() {
+  renderSlide();
 
-if (pendingInviteToken) {
-  showAuth("login");
-  $("email").focus();
-} else {
-  showScreen("onboarding");
+  if (restoreSavedSession()) {
+    await enterDashboard();
+    return;
+  }
+
+  if (pendingInviteToken) {
+    showAuth("login");
+    $("email").focus();
+  } else {
+    showScreen("onboarding");
+  }
 }
+
+startApplication();

@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,8 +26,8 @@
 <span class="statement-second">what's <span class="muted-word">up.</span></span>
 </h1>
 <p class="supporting-copy">
-            Your services are always doing something.<br>
-            See what matters, without the noise.
+Your services are always doing something.<br>
+See what matters, without the noise.
 </p>
 <div class="instrument">
 <div class="instrument-caption">
@@ -49,8 +50,8 @@
 <span class="statement-second">signal <span class="muted-word">counts.</span></span>
 </h1>
 <p class="supporting-copy">
-            Monitor your endpoints. Measure response times.<br>
-            Know when something needs your attention.
+Monitor your endpoints. Measure response times.<br>
+Know when something needs your attention.
 </p>
 <div class="instrument">
 <div class="instrument-caption">
@@ -83,8 +84,8 @@
 <span class="statement-second">one step <span class="muted-word">ahead.</span></span>
 </h1>
 <p class="supporting-copy">
-            Bring your services into focus.<br>
-            A simple workspace for the things you run.
+Bring your services into focus.<br>
+A simple workspace for the things you run.
 </p>
 <div class="instrument">
 <div class="instrument-caption">
@@ -123,8 +124,8 @@
 <span class="statement-second">into <span class="muted-word">focus.</span></span>
 </h1>
 <p class="supporting-copy">
-            Your services deserve your attention.<br>
-            Everything else can wait.
+Your services deserve your attention.<br>
+Everything else can wait.
 </p>
 </div>
 <div class="auth-box">
@@ -148,7 +149,6 @@
 
 <section id="dashboardScreen" class="screen dashboard-shell hidden">
 
-<!-- Sidebar on desktop / bottom navigation on mobile (layout handled in CSS) -->
 <nav class="app-nav" id="appNav" aria-label="Workspace navigation">
 <div class="nav-brand">
 <span class="nav-brand-mark">S<span>.</span></span>
@@ -192,7 +192,6 @@
 <button class="quiet-button" id="logoutButton">SIGN OUT</button>
 </div>
 
-<!-- VIEW: OVERVIEW -->
 <div class="dashboard-view active" data-view="overview">
 <div class="dashboard-intro">
 <div>
@@ -245,7 +244,6 @@
 </section>
 </div>
 
-<!-- VIEW: SERVICES -->
 <div class="dashboard-view hidden" data-view="services">
 <section class="data-section">
 <div class="section-heading">
@@ -293,7 +291,6 @@
 </section>
 </div>
 
-<!-- VIEW: HISTORY -->
 <div class="dashboard-view hidden" data-view="history">
 <section class="data-section activity-section">
 <div class="section-heading">
@@ -302,13 +299,24 @@
 <h2>Recent checks</h2>
 </div>
 </div>
+
+<div class="history-search">
+<label for="historySearch">SEARCH HISTORY</label>
+<input
+  id="historySearch"
+  type="search"
+  placeholder="Search service, project, status..."
+  autocomplete="off"
+  aria-label="Search check history"
+>
+</div>
+
 <div id="recentChecks" class="activity-list">
 <div class="empty-state">NO CHECK RESULTS YET.</div>
 </div>
 </section>
 </div>
 
-<!-- VIEW: TEAM -->
 <div class="dashboard-view hidden" data-view="team">
 <section class="data-section" id="teamSection">
 <div class="section-heading">

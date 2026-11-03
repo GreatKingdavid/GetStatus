@@ -803,3 +803,102 @@ main:has(.dashboard-shell:not(.hidden)) { width: min(1240px, 92%); }
     grid-column: 1 / -1;
   }
 }
+
+
+/* History search */
+.history-search {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  margin: 20px 0 12px;
+}
+
+.history-search label {
+  display: block;
+  margin: 0 0 10px;
+  color: #9b9b95;
+  font: 9px var(--mono);
+  letter-spacing: 1px;
+}
+
+.history-search input {
+  display: block;
+  width: 100%;
+  min-height: 47px;
+  padding: 0 13px;
+  border: 1px solid #30302d;
+  border-radius: 0;
+  outline: none;
+  background: #070707;
+  color: var(--white);
+  font: 12px var(--body);
+}
+
+.history-search input::placeholder {
+  color: #595954;
+}
+
+.history-search input:focus {
+  border-color: #777772;
+}
+
+/* Service delete button */
+.service-row {
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+}
+
+.delete-button {
+  min-height: 33px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 119, 119, 0.35);
+  background: transparent;
+  color: var(--red);
+  font: 9px var(--mono);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+  transition: background .18s, color .18s, border-color .18s;
+}
+
+.delete-button:hover:not(:disabled) {
+  border-color: var(--red);
+  background: rgba(255, 119, 119, 0.1);
+  color: #ff9999;
+}
+
+.delete-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+/* Mobile service layout */
+@media (max-width: 700px) {
+  .service-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .service-status {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .response-value {
+    grid-column: 2;
+    grid-row: 1;
+    text-align: right;
+  }
+
+  .service-row .check-button {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .service-row .delete-button {
+    grid-column: 2;
+    grid-row: 3;
+    justify-self: end;
+  }
+
+  .service-row .check-details {
+    grid-column: 1 / -1;
+  }
+}
