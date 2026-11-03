@@ -1,4 +1,3 @@
-
 import {
   Injectable,
   BadRequestException,
@@ -124,6 +123,69 @@ export class ServicesService {
     this.assertCanWrite(role);
 
     return this.executeCheck(service);
+  }
+
+  async delete(serviceId: number, userId: number) {
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      include: {
+        project: {
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    const { role } = await this.getProjectAccess(
+      service.project.id,
+      userId,
+    );
+
+    this.assertCanWrite(role);
+
+    if (this.inFlightChecks.has(serviceId)) {
+      throw new BadRequestException(
+        'Cannot delete a service while it is being checked',
+      );
+    }
+
+    const historyCount = await this.prisma.checkResult.count({
+      where: { serviceId },
+    });
+
+    if (historyCount > 0) {
+      throw new BadRequestException(
+        'Cannot delete this service because it has monitoring history',
+      );
+    }
+
+    try {
+      await this.prisma.service.delete({
+        where: { id: serviceId },
+      });
+    } catch (error) {
+      // The database Restrict relation protects check history
+      // if a check record is created between the count and deletion.
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'P2003'
+      ) {
+        throw new BadRequestException(
+          'Cannot delete this service because it has monitoring history',
+        );
+      }
+
+      throw error;
+    }
+
+    return { message: 'Service deleted successfully' };
   }
 
   async checkAllAutomatically() {

@@ -1,7 +1,7 @@
-
 import {
   Body,
   Controller,
+  Delete,
   Param,
   ParseIntPipe,
   Post,
@@ -38,5 +38,13 @@ export class ServicesController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.servicesService.check(id, req.user.sub);
+  }
+
+  @Delete(':id')
+  delete(
+    @Param('id', ParseIntPipe) id: number,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.servicesService.delete(id, req.user.sub);
   }
 }
