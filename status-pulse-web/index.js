@@ -289,64 +289,51 @@ function showAuth(mode = "login") {
 function updateInviteNotice() {
   const notice = $("inviteNotice");
 
-  if (pendingInviteToken) {
-    notice.textContent =
-      "You have a workspace invitation. Sign in or create an account using the email address the invitation was sent to.";
-
-    notice.classList.remove("hidden");
-  } else {
+  if (!pendingInviteToken) {
     notice.classList.add("hidden");
+    notice.textContent = "";
+    return;
   }
+
+  notice.textContent =
+    "You have a workspace invitation. Sign in or create an account to accept it.";
+
+  notice.classList.remove("hidden");
 }
 
-function clearInviteFromAddressBar() {
-  const url = new URL(window.location.href);
-
-  url.searchParams.delete("invite");
-
-  window.history.replaceState(
-    {},
-    "",
-    url.pathname + url.search + url.hash
-  );
-}
+$("loginTab").addEventListener("click", () => showAuth("login"));
+$("registerTab").addEventListener("click", () => showAuth("register"));
+$("backToIntro").addEventListener("click", goToIntro);
 
 async function acceptPendingInvitation() {
-  if (!pendingInviteToken) return;
-
-  const inviteToken = pendingInviteToken;
-
-  setMessage(
-    $("dashboardMessage"),
-    "Accepting your workspace invitation..."
-  );
+  if (!pendingInviteToken || !token) return;
 
   try {
-    await api("/invitations/accept", {
+    await api("/workspaces/invitations/accept", {
       method: "POST",
-      body: JSON.stringify({ token: inviteToken })
+      body: JSON.stringify({ token: pendingInviteToken })
     });
 
     pendingInviteToken = null;
-    clearInviteFromAddressBar();
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete("invite");
+
+    window.history.replaceState({}, "", url.toString());
 
     setMessage(
       $("dashboardMessage"),
-      "Invitation accepted. Your workspace is ready.",
+      "Workspace invitation accepted.",
       "success"
     );
   } catch (error) {
     setMessage(
       $("dashboardMessage"),
-      `Could not accept invitation: ${error.message}`,
+      `Unable to accept invitation: ${error.message}`,
       "error"
     );
   }
 }
-
-$("backToIntro").addEventListener("click", goToIntro);
-$("loginTab").addEventListener("click", () => showAuth("login"));
-$("registerTab").addEventListener("click", () => showAuth("register"));
 
 $("authForm").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -359,21 +346,28 @@ $("authForm").addEventListener("submit", async (event) => {
 
   setMessage(
     $("authMessage"),
-    isRegisterMode ? "Creating account..." : "Signing in..."
+    isRegisterMode ? "Creating your account..." : "Signing in..."
   );
 
   try {
-    if (isRegisterMode) {
-      await api("/users/register", {
+    const endpoint = isRegisterMode
+      ? "/auth/register"
+      : "/auth/login";
+
+    let result;
+
+    try {
+      result = await api(endpoint, {
         method: "POST",
         body: JSON.stringify({ email, password })
       });
-    }
+    } catch (error) {
+      if (isRegisterMode) {
+        throw error;
+      }
 
-    const result = await api("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password })
-    });
+      throw error;
+    }
 
     token =
       result.access_token ||
@@ -581,6 +575,105 @@ function formatSslExpiry(check) {
   return `Expires ${date} · ${remaining} days left`;
 }
 
+/* ---------- Failure classification ---------- */
+
+function classifyCheckFailure(check) {
+  if (!check || check.success) return null;
+
+  const statusCode = Number(check.statusCode);
+  const rawError = String(check.error || "").trim();
+  const message = rawError.toLowerCase();
+
+  // An HTTP response means DNS, connection and TLS negotiation succeeded.
+  if (Number.isFinite(statusCode) && statusCode >= 400) {
+    return {
+      type: "http_error",
+      label: "HTTP error response",
+      detail: `HTTP ${statusCode}`
+    };
+  }
+
+  // DNS errors must be identified before generic connection errors.
+  if (
+    /\b(ENOTFOUND|EAI_AGAIN|ENODATA|ESERVFAIL|EAI_FAIL)\b/i.test(rawError) ||
+    message.includes("getaddrinfo") ||
+    message.includes("dns lookup") ||
+    message.includes("name or service not known")
+  ) {
+    return {
+      type: "dns_failure",
+      label: "DNS resolution failure",
+      detail: rawError
+    };
+  }
+
+  // Connection timeouts.
+  if (
+    /\b(ETIMEDOUT|ESOCKETTIMEDOUT|ECONNABORTED|ABORT_ERR|ERR_SOCKET_TIMEOUT)\b/i.test(rawError) ||
+    message.includes("timed out") ||
+    message.includes("timeout")
+  ) {
+    return {
+      type: "connection_timeout",
+      label: "Connection timeout",
+      detail: rawError
+    };
+  }
+
+  // Connection refused.
+  if (
+    /\bECONNREFUSED\b/i.test(rawError) ||
+    message.includes("connection refused")
+  ) {
+    return {
+      type: "connection_refused",
+      label: "Connection refused",
+      detail: rawError
+    };
+  }
+
+  // TLS and certificate errors.
+  if (
+    /\b(CERT_[A-Z0-9_]+|ERR_TLS_[A-Z0-9_]+|ERR_SSL_[A-Z0-9_]+|DEPTH_ZERO_SELF_SIGNED_CERT|SELF_SIGNED_CERT_IN_CHAIN|UNABLE_TO_VERIFY_LEAF_SIGNATURE)\b/i.test(rawError) ||
+    message.includes("certificate") ||
+    message.includes("tls") ||
+    message.includes("ssl routines")
+  ) {
+    return {
+      type: "tls_error",
+      label: "TLS certificate error",
+      detail: rawError
+    };
+  }
+
+  if (rawError) {
+    return {
+      type: "connection_error",
+      label: "Connection error",
+      detail: rawError
+    };
+  }
+
+  return {
+    type: "check_failed",
+    label: "Check failed",
+    detail: "The endpoint did not pass its health check."
+  };
+}
+
+function checkFailureMarkup(check, className = "activity-error") {
+  const failure = classifyCheckFailure(check);
+
+  if (!failure) return "";
+
+  return `
+    <small class="${className}" data-failure-type="${failure.type}">
+      <strong>${escapeHTML(failure.label)}</strong>
+      ${failure.detail ? ` — ${escapeHTML(failure.detail)}` : ""}
+    </small>
+  `;
+}
+
 function checkDetailsMarkup(check) {
   if (!check) return "";
 
@@ -601,6 +694,7 @@ function checkDetailsMarkup(check) {
     </div>
   `;
 }
+/* ---------- Dashboard data loading ---------- */
 
 async function loadDashboard({ silent = false } = {}) {
   if (!token || dashboardLoadInProgress) {
@@ -776,6 +870,7 @@ function renderServices() {
         </button>
 
         ${checkDetailsMarkup(latest)}
+        ${checkFailureMarkup(latest, "activity-error service-error")}
       </article>
     `;
   }).join("");
@@ -821,9 +916,7 @@ function activityMarkup(checks) {
 
           ${checkDetailsMarkup(check)}
 
-          ${check.error
-            ? `<small class="activity-error">${escapeHTML(check.error)}</small>`
-            : ""}
+          ${checkFailureMarkup(check)}
         </div>
 
         <span class="activity-result ${ok ? "" : "failed"}">
@@ -845,6 +938,7 @@ function filterHistoryChecks(checks, query) {
 
   return checks.filter((check) => {
     const result = check.success ? "success" : "failed";
+    const failure = classifyCheckFailure(check);
 
     const searchableText = [
       check.serviceName,
@@ -852,6 +946,8 @@ function filterHistoryChecks(checks, query) {
       result,
       check.statusCode,
       check.error,
+      failure?.label,
+      failure?.type,
       check.responseTime,
       check.dnsResolutionTime
     ]
@@ -982,7 +1078,7 @@ $("serviceList").addEventListener("click", async (event) => {
     const serviceName = service?.name || "this service";
 
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${serviceName}"?\n\nServices with monitoring history cannot be deleted.`
+      `Are you sure you want to delete "${serviceName}"?\n\nThis will also permanently delete its monitoring history.`
     );
 
     if (!confirmed) return;
@@ -998,7 +1094,7 @@ $("serviceList").addEventListener("click", async (event) => {
 
       setMessage(
         $("dashboardMessage"),
-        "Service deleted successfully.",
+        "Service and its monitoring history deleted successfully.",
         "success"
       );
 
@@ -1145,7 +1241,6 @@ $("serviceForm").addEventListener("submit", async (event) => {
     if (button) button.disabled = false;
   }
 });
-
 /* ---------- Workspaces and team members ---------- */
 
 async function loadWorkspaces() {
